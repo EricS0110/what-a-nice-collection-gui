@@ -6,12 +6,19 @@ authors = ["Eric Sutton <ericsutton6@gmail.com>"]
 readme = "README.md"
 package-mode = false
 
+[tool.black]
+line-length = 120
+
+[tool.flake8]
+max-line-length = 120
+
 [tool.poetry.scripts]
 precommit = "pre-commit run"
 
 [tool.poetry.dependencies]
 python = "^3.12"
 mkdocs = "^1.6.0"
+nicegui = "^1.4.29"
 
 
 [tool.poetry.group.dev.dependencies]
