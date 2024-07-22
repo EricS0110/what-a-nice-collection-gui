@@ -1,6 +1,15 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
+- repo: local
+  hooks:
+  - id: update-requirements-txt
+    name: update-requirements-txt
+    description: 'Generate requirements.txt based on poetry.lock'
+    entry: poetry
+    args: [export, --format, requirements.txt, --output, requirements.txt]
+    language: system
+    pass_filenames: false
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:

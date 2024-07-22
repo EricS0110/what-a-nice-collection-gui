@@ -1,0 +1,7 @@
+site_name: Application Documentation
+
+nav:
+  - Home: index.md
+
+theme:
+  name: readthedocs
