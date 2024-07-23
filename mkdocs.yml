@@ -1,7 +1,7 @@
 site_name: Application Documentation
 
 nav:
-  - Home: landing.md
+  - Home: index.md
   - MongoDB: mongo_setup.md
   - Python: python_setup.md
   - App Setup: local_setup.md
