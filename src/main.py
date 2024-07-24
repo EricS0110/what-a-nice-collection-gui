@@ -29,6 +29,7 @@ with open(Path(__file__).parent.parent.resolve() / "fields_cache.json", "r") as 
 ui.page_title("Collections App")
 with ui.tabs().classes("w-full") as main_tabs:
     welcome_tab = ui.tab("Welcome")
+    new_collection = ui.tab("New Collection")
     add_one_tab = ui.tab("Add One")
     add_bulk_tab = ui.tab("Add Bulk")
     search_tab = ui.tab("Search")
@@ -41,6 +42,7 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
         ui.label("This application will help you manage what items are stored in your MongoDB collections.")
         ui.label("Tabs:")
         ui.markdown("\t- __Welcome__: You are here!")
+        ui.markdown("\t- __New Collection__: add a new collection to your database")
         ui.markdown("\t- __Add One__: add a single item to a collection of your choice")
         ui.markdown("\t- __Add Bulk__: add multiple items based on an Excel file input")
         ui.markdown("\t- __Search__: search your collections for a given item")
@@ -62,12 +64,17 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             ui.label("Available collections: ")
             ui.label(f"{available_collections_str}")
 
+    # TODO: implement a "create new collection" interface that checks pre-existing names so there's no conflicts
+    with ui.tab_panel(new_collection):
+        ui.markdown("# New Collection")
+
     # Set up the "Add One" tab environment
     current_add_one_fields = {}
     current_add_one_fields_enums = {}
 
     def add_one_item():
-        ui.notify("Clicked")
+        ui.notify("Adding item...")
+        this_collection = collection_selection.value
         these_fields = current_add_one_fields
         these_fields_enums = current_add_one_fields_enums
         item_data = {}
@@ -75,7 +82,8 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             input_value = these_fields[k].value
             if input_value != "":
                 item_data[v] = these_fields[k].value
-
+                ui.notify(f"{v}: {these_fields[k].value}")
+        ui.notify(f"Item added to {this_collection}")
         return
 
     with ui.tab_panel(add_one_tab):
@@ -84,7 +92,7 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
         with ui.row():
             with ui.card():
                 ui.markdown("### Select a collection:")
-                ui.select(
+                collection_selection = ui.select(
                     options=available_collections, on_change=lambda item: update_add_one_card(item.value)
                 ).classes("w-full bg-gray-200 shadow-lg text-lg")
             ui.button(text="ADD", on_click=add_one_item, color="green")
