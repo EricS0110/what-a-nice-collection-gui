@@ -19,6 +19,8 @@ precommit = "pre-commit run"
 python = "^3.12"
 mkdocs = "^1.6.0"
 nicegui = "^1.4.29"
+pydantic-settings = "^2.3.4"
+pymongo = "^4.8.0"
 
 
 [tool.poetry.group.dev.dependencies]
