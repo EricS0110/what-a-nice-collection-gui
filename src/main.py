@@ -1,13 +1,25 @@
 import json
+from io import BytesIO
 from pathlib import Path
 
-from nicegui import ui
+import pandas as pd
+from nicegui import events, ui
 
 # from mongo import MongoConnection
 from security import check_credentials
 
+
+def clean_list_string(input_list: list) -> str:
+    return ", ".join(map(str, input_list))
+
+
+src_dir = Path(__file__).parent.resolve()
+
 # Get MongoDB details and any other application configurations established
 settings = check_credentials()
+
+# Global variable to store a bulk upload file
+bulk_upload_file = None
 
 # # Get a MongoDB connection instance
 # mongo_conn = MongoConnection(settings)
@@ -21,7 +33,6 @@ settings = check_credentials()
 # fields_cache = mongo_conn.read_fields_cache()
 
 available_collections = ["books", "comics", "movies", "music", "television"]
-available_collections_str = ", ".join(available_collections)
 with open(Path(__file__).parent.parent.resolve() / "fields_cache.json", "r") as fields_cache_file:
     fields_cache = json.load(fields_cache_file)
 
@@ -61,12 +72,30 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             ui.label("Source docs: ")
             ui.link("Go to GitHub Pages!", "https://erics0110.github.io/what-a-nice-collection-gui/")
 
-            ui.label("Available collections: ")
-            ui.label(f"{available_collections_str}")
+            ui.label("Available collections at startup: ")  # TODO: Figure out a way to sync this when adding coll.
+            ui.label(f"{clean_list_string(available_collections)}")
 
-    # TODO: implement a "create new collection" interface that checks pre-existing names so there's no conflicts
+    # Set up the "New Collection" tab environment
+    def add_new_collection():
+        new_collection_value = new_collection_input_field.value.lower().strip()
+        existing_collections = available_collections
+        if new_collection_value == "":
+            ui.notify("Please enter a collection name")
+            return
+        if new_collection_value not in existing_collections:
+            # add the new collection
+            ui.notify("Adding new collection...")
+            available_collections.append(new_collection_value)  # TODO: will need to extend this to create in Mongo
+            ui.notify(f"Available collections: {available_collections}")
+        else:
+            ui.notify("Collection already exists!")
+
     with ui.tab_panel(new_collection):
         ui.markdown("# New Collection")
+        ui.markdown("### Name the new collection (lower-case only): ")
+        with ui.card():
+            new_collection_input_field = ui.input(label="new collection")
+            ui.button(text="ADD", color="green", on_click=add_new_collection)
 
     # Set up the "Add One" tab environment
     current_add_one_fields = {}
@@ -83,6 +112,7 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             if input_value != "":
                 item_data[v] = these_fields[k].value
                 ui.notify(f"{v}: {these_fields[k].value}")
+        # TODO: Need to update to actually send to Mongo, confirm with user before send
         ui.notify(f"Item added to {this_collection}")
         return
 
@@ -114,8 +144,70 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             return
 
     # Set up the "Add Bulk" tab environment
-    with ui.tab_panel(add_bulk_tab):
-        ui.label("Add Bulk text")
+    with ui.tab_panel(add_bulk_tab) as bulk_tab_panel:
+        with open(Path(src_dir / "bulk_import.md"), "r") as bulk_import_readme_file:
+            bulk_import_markdown_content = bulk_import_readme_file.read()
+
+        def upload_bulk_items():
+            global bulk_upload_file
+            if bulk_upload_file is not None:
+                ui.notify("File uploaded, now sending to MongoDB")
+            else:
+                ui.notify("No file uploaded, please select a file")
+            return
+
+        def reset_bulk_tab_panel():
+            global bulk_upload_file
+            bulk_upload_file = None
+            bulk_tab_panel.clear()
+            with bulk_tab_panel:
+                ui.markdown(bulk_import_markdown_content)
+                with ui.row():
+                    ui.upload(label="SELECT YOUR FILE", on_upload=add_bulk_items)
+                    ui.button(
+                        text="RESET",
+                        on_click=reset_bulk_tab_panel,
+                        color="orange",
+                    )
+                    ui.button(text="CONFIRM UPLOAD", on_click=upload_bulk_items, color="green")
+
+        def df_to_table(input_df: pd.DataFrame):
+            return_columns = []
+            return_rows = []
+
+            df_head = input_df.head(n=10)
+
+            for col in input_df.columns:
+                return_columns.append(
+                    {
+                        "name": col,
+                        "label": col,
+                        "field": col,
+                    }
+                )
+            if not input_df.empty:
+                return_rows = df_head.to_dict(orient="records")
+
+            return return_columns, return_rows
+
+        def add_bulk_items(e: events.UploadEventArguments):
+            if e.content is not None:
+                global bulk_upload_file
+                bulk_upload_file = e.content.read()
+                mocked_excel_file = BytesIO(bulk_upload_file)
+                bulk_excel = pd.read_excel(mocked_excel_file, sheet_name=None)
+                with bulk_tab_panel:
+                    ui.label(f"File Uploaded: {e.name}")
+                    for sheet_name, df in bulk_excel.items():
+                        ui.label(f"Sheet: {sheet_name}")
+                        columns, rows = df_to_table(df)
+                        ui.table(columns=columns, rows=rows)
+
+        ui.markdown(bulk_import_markdown_content)
+        with ui.row():
+            ui.upload(label="SELECT A FILE!", on_upload=add_bulk_items)
+            ui.button(text="RESET", on_click=reset_bulk_tab_panel, color="orange")
+            ui.button(text="CONFIRM UPLOAD", on_click=upload_bulk_items, color="green")
 
     # Set up the "Search" tab environment
     with ui.tab_panel(search_tab):
