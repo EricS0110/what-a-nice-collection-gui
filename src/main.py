@@ -1,11 +1,10 @@
-import json
 from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
 from nicegui import events, ui
 
-# from mongo import MongoConnection
+from mongo import MongoConnection
 from security import check_credentials
 
 
@@ -18,23 +17,24 @@ src_dir = Path(__file__).parent.resolve()
 # Get MongoDB details and any other application configurations established
 settings = check_credentials()
 
-# Global variable to store a bulk upload file
-bulk_upload_file = None
+# Global variables
+bulk_upload_file = None  # store a bulk upload file
+available_collections_label = None  # refreshable available collections list
 
-# # Get a MongoDB connection instance
-# mongo_conn = MongoConnection(settings)
-#
-# # Set up the list of available collections
-# available_collections = mongo_conn.get_collections()  # List[str]
-# available_collections_str = ", ".join(available_collections)  # Single string of comma-sep values
-#
-# # Set up or update the cache of available fields for each collection
-# mongo_conn.update_fields_cache()
-# fields_cache = mongo_conn.read_fields_cache()
+# Get a MongoDB connection instance
+mongo_conn = MongoConnection(settings)
 
-available_collections = ["books", "comics", "movies", "music", "television"]
-with open(Path(__file__).parent.parent.resolve() / "fields_cache.json", "r") as fields_cache_file:
-    fields_cache = json.load(fields_cache_file)
+# Set up the list of available collections
+available_collections = mongo_conn.get_collections()  # List[str]
+available_collections_str = ", ".join(mongo_conn.get_collections())  # Single string of comma-sep values
+
+# Set up or update the cache of available fields for each collection
+mongo_conn.update_fields_cache()
+fields_cache = mongo_conn.read_fields_cache()
+
+# available_collections = ["books", "comics", "movies", "music", "television"]
+# with open(Path(__file__).parent.parent.resolve() / "fields_cache.json", "r") as fields_cache_file:
+#     fields_cache = json.load(fields_cache_file)
 
 # Set up the UI elements
 ui.page_title("Collections App")
@@ -47,7 +47,8 @@ with ui.tabs().classes("w-full") as main_tabs:
     delete_tab = ui.tab("Delete")
 with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
     # Set up the "Welcome" tab environment
-    with ui.tab_panel(welcome_tab):
+    with ui.tab_panel(welcome_tab) as welcome_panel:
+        welcome_panel.clear()
         ui.markdown("# Welcome to the Collections Manager application")
         ui.separator()
         ui.label("This application will help you manage what items are stored in your MongoDB collections.")
@@ -72,21 +73,21 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             ui.label("Source docs: ")
             ui.link("Go to GitHub Pages!", "https://erics0110.github.io/what-a-nice-collection-gui/")
 
-            ui.label("Available collections at startup: ")  # TODO: Figure out a way to sync this when adding coll.
-            ui.label(f"{clean_list_string(available_collections)}")
+            ui.label("Available collections at startup: ")
+            ui.label(f"{clean_list_string(mongo_conn.get_collections())}")
 
     # Set up the "New Collection" tab environment
     def add_new_collection():
         new_collection_value = new_collection_input_field.value.lower().strip()
-        existing_collections = available_collections
+        existing_collections = mongo_conn.get_collections()
         if new_collection_value == "":
             ui.notify("Please enter a collection name")
             return
         if new_collection_value not in existing_collections:
             # add the new collection
             ui.notify("Adding new collection...")
-            available_collections.append(new_collection_value)  # TODO: will need to extend this to create in Mongo
-            ui.notify(f"Available collections: {available_collections}")
+            mongo_conn.add_collection(new_collection_value)
+            ui.notify(f"Available collections: {mongo_conn.get_collections()}")
         else:
             ui.notify("Collection already exists!")
 
@@ -123,7 +124,7 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             with ui.card():
                 ui.markdown("### Select a collection:")
                 collection_selection = ui.select(
-                    options=available_collections, on_change=lambda item: update_add_one_card(item.value)
+                    options=mongo_conn.get_collections(), on_change=lambda item: update_add_one_card(item.value)
                 ).classes("w-full bg-gray-200 shadow-lg text-lg")
             ui.button(text="ADD", on_click=add_one_item, color="green")
 

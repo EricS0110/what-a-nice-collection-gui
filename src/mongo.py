@@ -21,6 +21,10 @@ class MongoConnection:
         else:
             return found_collections
 
+    def add_collection(self, collection_value: str):
+        self.db.create_collection(collection_value)
+        return
+
     def update_fields_cache(self):
         found_collections = [col["name"] for col in self.db.list_collections()]
         fields_cache = {}
