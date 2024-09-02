@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from bson import ObjectId
 from pymongo import MongoClient
 
 from src.security import Settings, check_credentials
@@ -115,9 +116,25 @@ class MongoConnection:
         :param search_value: string value to search for in the field
         :return: List of dictionaries representing the search results
         """
-        item_query = {f"{search_field}": {"$regex": search_value, "$options": "i"}}
-        search_results = [document for document in self.db[collection].find(item_query)]
+        if search_field == "_id":
+            try:
+                search_results = self.db[collection].find({"_id": ObjectId(search_value)})
+            except Exception:
+                return []  # Return an empty list if the ObjectId conversion fails
+        else:
+            item_query = {f"{search_field}": {"$regex": search_value, "$options": "i"}}
+            search_results = [document for document in self.db[collection].find(item_query)]
         return list(search_results)
+
+    def delete_item(self, collection: str, item_id: str) -> None:
+        """
+        Delete a single item from a collection in MongoDB
+        :param collection: string value for the Collection name
+        :param item_id: string value for the item's ObjectId
+        :return: None
+        """
+        self.db[collection].delete_one({"_id": ObjectId(item_id)})
+        return
 
 
 if __name__ == "__main__":

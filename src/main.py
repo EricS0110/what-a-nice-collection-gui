@@ -26,6 +26,8 @@ confirm_upload_button = None  # enable/disable bulk upload confirm button
 search_collection_picked = ""  # store the collection picked for search
 search_field_picked = ""  # store the field picked for search
 search_results_data = []  # store the results of the search
+delete_from_collection = ""  # store the collection picked for deletion method
+delete_id = ""  # store the ID of the item to delete
 
 # Get a MongoDB connection instance
 mongo_conn = MongoConnection(settings)
@@ -343,6 +345,63 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
 
     # Set up the "Delete" tab environment
     with ui.tab_panel(delete_tab):
-        ui.label("Delete text")
+
+        def update_delete_collection(value):
+            global delete_from_collection
+            delete_from_collection = value
+            delete_id_input.enable()
+            return
+
+        def verify_delete():
+            global delete_button
+            global delete_check_table
+            global delete_id
+
+            delete_id = delete_id_input.value
+            delete_check_results = mongo_conn.search_collection(delete_from_collection, "_id", delete_id)
+            if not delete_check_results:
+                ui.notify(f"No item found with ID: {delete_id}")
+            else:
+                delete_check_df = pd.DataFrame(delete_check_results)
+                delete_check_cols, delete_check_rows = search_df_to_table(delete_check_df)
+                delete_check_table.columns = delete_check_cols
+                delete_check_table.rows = delete_check_rows
+                delete_button.enable()
+            return
+
+        def delete_item_click():
+            global delete_button
+            global delete_check_table
+            global delete_from_collection
+            global delete_id
+            mongo_conn.delete_item(delete_from_collection, delete_id)
+            ui.notify(f"{delete_id} has been deleted from {delete_from_collection}")
+            delete_button.disable()
+            delete_check_table.columns = []
+            delete_check_table.rows = []
+            return
+
+        with open(Path(src_dir / "delete_readme.md"), "r") as delete_readme_file:
+            delete_readme_md = delete_readme_file.read()
+        ui.markdown(delete_readme_md)
+        with ui.row():
+            # Left Space
+            with ui.column():
+                with ui.card():
+                    ui.markdown("### Select a collection:")
+                    delete_from_collection_select = ui.select(
+                        options=mongo_conn.get_collections(),
+                        on_change=lambda item: update_delete_collection(item.value),
+                    ).classes("w-full bg-gray-200 shadow-lg text-lg")
+                    delete_id_input = ui.input(label="Item ID:").classes("w-full")
+                    delete_id_input.disable()
+            # Middle Space
+            with ui.column():
+                verify_delete_button = ui.button(text="VERIFY", color="orange", on_click=verify_delete)
+                delete_button = ui.button(text="DELETE", color="red", on_click=delete_item_click)
+                delete_button.disable()
+            # Right Space
+            with ui.column():
+                delete_check_table = ui.table(columns=[], rows=[])
 
 ui.run()
