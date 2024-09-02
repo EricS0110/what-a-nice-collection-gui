@@ -2,6 +2,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
+from bson import ObjectId
 from nicegui import events, ui
 
 from mongo import MongoConnection
@@ -22,7 +23,9 @@ bulk_upload_file = None  # store a bulk upload file
 bulk_upload_data = None  # store the data from the bulk upload file
 available_collections_label = None  # refreshable available collections list
 confirm_upload_button = None  # enable/disable bulk upload confirm button
-# add_item_button = None
+search_collection_picked = ""  # store the collection picked for search
+search_field_picked = ""  # store the field picked for search
+search_results_data = []  # store the results of the search
 
 # Get a MongoDB connection instance
 mongo_conn = MongoConnection(settings)
@@ -249,8 +252,94 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             confirm_upload_button.disable()
 
     # Set up the "Search" tab environment
+    current_search_fields = {}
+    current_search_fields_enums = {}
+
     with ui.tab_panel(search_tab):
-        ui.label("Search text")
+        with ui.row():
+            with ui.column():
+                with ui.card():
+                    ui.markdown("### Select a collection:")
+                    search_collection_select = ui.select(
+                        options=mongo_conn.get_collections(), on_change=lambda item: update_search_card(item.value)
+                    ).classes("w-full bg-gray-200 shadow-lg text-lg")
+                    ui.markdown("#### Select a field to search:")
+                    search_fields = ui.select(
+                        options=["Select a collection first"], on_change=lambda item: prepare_search(item.value)
+                    ).classes("w-full bg-gray-200 shadow-lg text-lg")
+                    search_fields.disable()
+                    ui.markdown("##### Enter the search value:")
+                    search_value_input = ui.input(label="Search Value")
+
+                    def search_df_to_table(input_df: pd.DataFrame):
+                        return_columns = []
+                        return_rows = []
+
+                        for col in input_df.columns:
+                            return_columns.append(
+                                {
+                                    "name": col,
+                                    "label": col,
+                                    "field": col,
+                                }
+                            )
+                        if not input_df.empty:
+                            return_rows = input_df.to_dict(orient="records")
+
+                        for row in return_rows:
+                            for key, value in row.items():
+                                if isinstance(value, ObjectId):
+                                    row[key] = str(value)
+
+                        return return_columns, return_rows
+
+                    def update_search_card(value):
+                        global search_collection_picked
+                        global search_fields
+                        current_search_fields.clear()
+                        current_search_fields_enums.clear()
+                        search_collection_picked = value
+                        search_options = [item for item in fields_cache[value] if item != "_id"]
+                        search_fields.set_options(search_options)
+                        search_fields.enable()
+                        return
+
+                    def prepare_search(value):
+                        global search_button
+                        global search_field_picked
+                        search_button.enable()
+                        search_field_picked = value
+
+                    def search_collection_items():
+                        global search_collection_picked
+                        global search_field_picked
+                        global search_results_data
+                        global search_results_table
+                        search_collection_value = search_collection_picked
+                        search_field_value = search_field_picked
+                        search_value = search_value_input.value
+                        search_results_data = []
+                        if (
+                            (search_value is not None)
+                            and (search_collection_value != "")
+                            and (search_field_value != "")
+                        ):
+                            search_results_data = mongo_conn.search_collection(
+                                search_collection_value, search_field_value, search_value
+                            )
+                            search_results_df = pd.DataFrame(search_results_data)
+                            res_cols, res_rows = search_df_to_table(search_results_df)
+                            search_results_table.columns = res_cols
+                            search_results_table.rows = res_rows
+                        else:
+                            ui.notify("Please enter a search value")
+                        return
+
+                search_button = ui.button(text="SEARCH", color="green", on_click=search_collection_items)
+                search_button.disable()
+            with ui.column().classes("w-full"):
+                ui.markdown("#### Search Results:")
+                search_results_table = ui.table(columns=[], rows=[])
 
     # Set up the "Delete" tab environment
     with ui.tab_panel(delete_tab):

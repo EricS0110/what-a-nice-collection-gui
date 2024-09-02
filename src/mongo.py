@@ -107,6 +107,18 @@ class MongoConnection:
                 self.db[collection].insert_many(data)
         return
 
+    def search_collection(self, collection: str, search_field: str, search_value: str) -> list | list[str]:
+        """
+        Search for a specific value in a collection
+        :param collection: string value for the Collection name
+        :param search_field: string value for the field to search
+        :param search_value: string value to search for in the field
+        :return: List of dictionaries representing the search results
+        """
+        item_query = {f"{search_field}": {"$regex": search_value, "$options": "i"}}
+        search_results = [document for document in self.db[collection].find(item_query)]
+        return list(search_results)
+
 
 if __name__ == "__main__":
     testing_settings = check_credentials()
