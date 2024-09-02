@@ -19,7 +19,10 @@ settings = check_credentials()
 
 # Global variables
 bulk_upload_file = None  # store a bulk upload file
+bulk_upload_data = None  # store the data from the bulk upload file
 available_collections_label = None  # refreshable available collections list
+confirm_upload_button = None  # enable/disable bulk upload confirm button
+# add_item_button = None
 
 # Get a MongoDB connection instance
 mongo_conn = MongoConnection(settings)
@@ -31,10 +34,6 @@ available_collections_str = ", ".join(mongo_conn.get_collections())  # Single st
 # Set up or update the cache of available fields for each collection
 mongo_conn.update_fields_cache()
 fields_cache = mongo_conn.read_fields_cache()
-
-# available_collections = ["books", "comics", "movies", "music", "television"]
-# with open(Path(__file__).parent.parent.resolve() / "fields_cache.json", "r") as fields_cache_file:
-#     fields_cache = json.load(fields_cache_file)
 
 # Set up the UI elements
 ui.page_title("Collections App")
@@ -102,7 +101,23 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
     current_add_one_fields = {}
     current_add_one_fields_enums = {}
 
+    def check_new_item():
+        global add_item_button
+        these_fields = current_add_one_fields
+        these_fields_enums = current_add_one_fields_enums
+        item_data = {}
+        check_label_string = "Please verify item...\n\n"
+        for k, v in these_fields_enums.items():
+            input_value = these_fields[k].value
+            if input_value != "":
+                item_data[v] = these_fields[k].value
+                check_label_string += f"{v}: {these_fields[k].value} \n\n"
+                # ui.notify(f"{v}: {these_fields[k].value}")
+        add_one_check_label.set_content(check_label_string)
+        add_item_button.enable()
+
     def add_one_item():
+        global add_item_button
         ui.notify("Adding item...")
         this_collection = collection_selection.value
         these_fields = current_add_one_fields
@@ -112,37 +127,47 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             input_value = these_fields[k].value
             if input_value != "":
                 item_data[v] = these_fields[k].value
-                ui.notify(f"{v}: {these_fields[k].value}")
-        # TODO: Need to update to actually send to Mongo, confirm with user before send
+        mongo_conn.add_item(this_collection, item_data)
         ui.notify(f"Item added to {this_collection}")
+        add_one_check_label.set_content("Enter next item details if desired...")
+        add_item_button.disable()
         return
 
     with ui.tab_panel(add_one_tab):
         ui.markdown("# Add One Item")
         ui.separator()
         with ui.row():
-            with ui.card():
-                ui.markdown("### Select a collection:")
-                collection_selection = ui.select(
-                    options=mongo_conn.get_collections(), on_change=lambda item: update_add_one_card(item.value)
-                ).classes("w-full bg-gray-200 shadow-lg text-lg")
-            ui.button(text="ADD", on_click=add_one_item, color="green")
+            with ui.column():
+                with ui.row():
+                    with ui.card():
+                        ui.markdown("### Select a collection:")
+                        collection_selection = ui.select(
+                            options=mongo_conn.get_collections(), on_change=lambda item: update_add_one_card(item.value)
+                        ).classes("w-full bg-gray-200 shadow-lg text-lg")
+                    with ui.column():
+                        ui.button(text="Check", on_click=check_new_item, color="orange")
+                        add_item_button = ui.button(text="ADD", on_click=add_one_item, color="green")
+                        add_item_button.disable()
 
-        add_one_fields_card = ui.card()
+                add_one_fields_card = ui.card()
 
-        def update_add_one_card(value):
-            current_add_one_fields.clear()
-            current_add_one_fields_enums.clear()
-            add_one_fields_card.clear()
-            with add_one_fields_card:
-                for field in fields_cache[value]:
-                    with ui.row():
-                        if field != "_id":
-                            this_add_one_field = ui.input(label=field)
-                            current_add_one_fields[this_add_one_field.id] = this_add_one_field
-                            current_add_one_fields_enums[this_add_one_field.id] = field
-            add_one_fields_card.update()
-            return
+                def update_add_one_card(value):
+                    current_add_one_fields.clear()
+                    current_add_one_fields_enums.clear()
+                    add_one_fields_card.clear()
+                    with add_one_fields_card:
+                        for field in fields_cache[value]:
+                            with ui.row():
+                                if field != "_id":
+                                    this_add_one_field = ui.input(label=field)
+                                    current_add_one_fields[this_add_one_field.id] = this_add_one_field
+                                    current_add_one_fields_enums[this_add_one_field.id] = field
+                    add_one_fields_card.update()
+                    add_item_button.disable()
+                    return
+
+            with ui.column():
+                add_one_check_label = ui.markdown("Please select a collection to begin...")
 
     # Set up the "Add Bulk" tab environment
     with ui.tab_panel(add_bulk_tab) as bulk_tab_panel:
@@ -150,9 +175,11 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             bulk_import_markdown_content = bulk_import_readme_file.read()
 
         def upload_bulk_items():
+            global bulk_upload_data
             global bulk_upload_file
             if bulk_upload_file is not None:
-                ui.notify("File uploaded, now sending to MongoDB")
+                ui.notify("File loaded, now sending to MongoDB")
+                mongo_conn.upload_bulk(bulk_upload_data)
             else:
                 ui.notify("No file uploaded, please select a file")
             return
@@ -170,7 +197,12 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
                         on_click=reset_bulk_tab_panel,
                         color="orange",
                     )
-                    ui.button(text="CONFIRM UPLOAD", on_click=upload_bulk_items, color="green")
+                    global confirm_upload_button
+                    if confirm_upload_button is not None:
+                        confirm_upload_button = ui.button(
+                            text="CONFIRM UPLOAD", on_click=upload_bulk_items, color="green"
+                        )
+                    confirm_upload_button.disable()
 
         def df_to_table(input_df: pd.DataFrame):
             return_columns = []
@@ -192,8 +224,11 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             return return_columns, return_rows
 
         def add_bulk_items(e: events.UploadEventArguments):
+            global bulk_upload_data
+            global bulk_upload_file
             if e.content is not None:
-                global bulk_upload_file
+                if confirm_upload_button is not None:
+                    confirm_upload_button.enable()
                 bulk_upload_file = e.content.read()
                 mocked_excel_file = BytesIO(bulk_upload_file)
                 bulk_excel = pd.read_excel(mocked_excel_file, sheet_name=None)
@@ -203,12 +238,15 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
                         ui.label(f"Sheet: {sheet_name}")
                         columns, rows = df_to_table(df)
                         ui.table(columns=columns, rows=rows)
+                bulk_upload_data = bulk_excel
 
         ui.markdown(bulk_import_markdown_content)
         with ui.row():
             ui.upload(label="SELECT A FILE!", on_upload=add_bulk_items)
             ui.button(text="RESET", on_click=reset_bulk_tab_panel, color="orange")
-            ui.button(text="CONFIRM UPLOAD", on_click=upload_bulk_items, color="green")
+            # noinspection PyRedeclaration
+            confirm_upload_button = ui.button(text="CONFIRM UPLOAD", on_click=upload_bulk_items, color="green")
+            confirm_upload_button.disable()
 
     # Set up the "Search" tab environment
     with ui.tab_panel(search_tab):
