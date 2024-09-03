@@ -162,3 +162,4 @@ cython_debug/
 #.idea/
 /mongo.env
 /fields_cache.json
+/BulkUpload.xlsx
