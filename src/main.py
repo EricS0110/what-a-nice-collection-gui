@@ -185,6 +185,9 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             if bulk_upload_file is not None:
                 ui.notify("File loaded, now sending to MongoDB")
                 mongo_conn.upload_bulk(bulk_upload_data)
+                ui.notify("Data uploaded to MongoDB")
+                global confirm_upload_button
+                confirm_upload_button.disable()
             else:
                 ui.notify("No file uploaded, please select a file")
             return
