@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 from bson import ObjectId
-from nicegui import events, ui
+from nicegui import app, events, ui
 
 from mongo import MongoConnection
 from security import check_credentials
@@ -40,6 +40,13 @@ available_collections_str = ", ".join(mongo_conn.get_collections())  # Single st
 mongo_conn.update_fields_cache()
 fields_cache = mongo_conn.read_fields_cache()
 
+
+def close_session():
+    ui.notify("Python ended, you can now close the browser tab")
+    app.shutdown()
+    return
+
+
 # Set up the UI elements
 ui.page_title("Collections App")
 with ui.tabs().classes("w-full") as main_tabs:
@@ -47,6 +54,7 @@ with ui.tabs().classes("w-full") as main_tabs:
     new_collection = ui.tab("New Collection")
     add_one_tab = ui.tab("Add One")
     add_bulk_tab = ui.tab("Add Bulk")
+    export_tab = ui.tab("Download")
     search_tab = ui.tab("Search")
     delete_tab = ui.tab("Delete")
 with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
@@ -79,6 +87,8 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
 
             ui.label("Available collections at startup: ")
             ui.label(f"{clean_list_string(mongo_conn.get_collections())}")
+
+            ui.button(text="Close Session", on_click=close_session, color="red")
 
     # Set up the "New Collection" tab environment
     def add_new_collection():
@@ -256,6 +266,10 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             confirm_upload_button = ui.button(text="CONFIRM UPLOAD", on_click=upload_bulk_items, color="green")
             confirm_upload_button.disable()
 
+    # Set up the "Export" tab environment
+    with ui.tab_panel(export_tab):
+        ui.label("This is where I need to code up for Excel exports")  # TODO: Add export functionality
+
     # Set up the "Search" tab environment
     current_search_fields = {}
     current_search_fields_enums = {}
@@ -407,4 +421,9 @@ with ui.tab_panels(main_tabs, value=welcome_tab).classes("w-full"):
             with ui.column():
                 delete_check_table = ui.table(columns=[], rows=[])
 
-ui.run()
+
+def on_shutdown():
+    print("Web window closed. Shutting down...")
+
+
+ui.run(reload=False)
